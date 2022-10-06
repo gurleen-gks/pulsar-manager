@@ -21,6 +21,7 @@ import com.google.gson.reflect.TypeToken;
 import java.text.DecimalFormat;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.pulsar.client.admin.Brokers;
 import org.apache.pulsar.client.admin.PulsarAdminException;
 import org.apache.pulsar.manager.controller.exception.PulsarAdminOperationException;
@@ -53,6 +54,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
 @Configuration
@@ -66,6 +68,9 @@ public class BrokerStatsServiceImpl implements BrokerStatsService {
 
     @Value("${clear.stats.interval}")
     private Long clearStatsInterval;
+
+    @Value("${tls.enabled}")
+    private boolean tlsEnabled;
 
     private final EnvironmentsRepository environmentsRepository;
     private final ClustersService clustersService;
@@ -119,17 +124,21 @@ public class BrokerStatsServiceImpl implements BrokerStatsService {
         for (EnvironmentEntity env : environmentEntities) {
             String serviceUrl = checkServiceUrl(null, env.getBroker());
             Map<String, Object> clusterObject =
-                clustersService.getClustersList(0, 0, serviceUrl, (c) -> serviceUrl);
+                    clustersService.getClustersList(0, 0, serviceUrl, (c) -> serviceUrl);
             List<HashMap<String, Object>> clusterLists = (List<HashMap<String, Object>>) clusterObject.get("data");
             clusterLists.forEach((clusterMap) -> {
                 String cluster = (String) clusterMap.get("cluster");
                 Pair<String, String> envCluster = Pair.of(env.getName(), cluster);
-                String webServiceUrl = (String) clusterMap.get("serviceUrl");
+
+                String serviceUrlTls = (String) clusterMap.get("serviceUrlTls");
+                tlsEnabled = tlsEnabled && StringUtils.isNotBlank(serviceUrlTls);
+                String webServiceUrl = tlsEnabled ? serviceUrlTls : (String) clusterMap.get("serviceUrl");
                 if (webServiceUrl.contains(",")) {
                     String[] webServiceUrlList = webServiceUrl.split(",");
                     for (String url : webServiceUrlList) {
-                        if (!url.contains("http://")) {
-                            url = "http://" + url;
+                        // making sure the protocol is appended in case the env was added without the protocol
+                        if (!tlsEnabled && !url.contains("http://")) {
+                            url = (tlsEnabled ? "https://" : "http://") + url;
                         }
                         try {
                             Brokers brokers = pulsarAdminService.brokers(url);
@@ -146,7 +155,7 @@ public class BrokerStatsServiceImpl implements BrokerStatsService {
         }
         collectStatsServiceUrls.forEach((envCluster, serviceUrl) -> {
             log.info("Start collecting stats from env {} / cluster {} @ {}",
-                envCluster.getLeft(), envCluster.getRight(), serviceUrl);
+                    envCluster.getLeft(), envCluster.getRight(), serviceUrl);
             collectStatsToDB(unixTime, envCluster.getLeft(), envCluster.getRight(), serviceUrl);
         });
 
@@ -158,9 +167,16 @@ public class BrokerStatsServiceImpl implements BrokerStatsService {
         Map<String, Object> brokerObject = brokersService.getBrokersList(0, 0, cluster, serviceUrl);
         List<HashMap<String, Object>> brokerLists = (List<HashMap<String, Object>>) brokerObject.get("data");
         brokerLists.forEach((brokerMap) -> {
+            // returns [Broker Hostname]:[Broker non Tls port]
             String tempBroker = (String) brokerMap.get("broker");
-            // TODO: handle other protocols
+            //default to http
             String broker = "http://" + tempBroker;
+            // if tls enabled the protocol and port is extracted from service url
+            if (tlsEnabled && tempBroker.contains(":")) {
+                String brokerHost = tempBroker.substring(0, tempBroker.indexOf(":"));
+                UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(serviceUrl);
+                broker = builder.host(brokerHost).toUriString();
+            }
             JsonObject result;
             try {
                 result = pulsarAdminService.brokerStats(broker).getTopics();
@@ -170,8 +186,8 @@ public class BrokerStatsServiceImpl implements BrokerStatsService {
             }
             Gson gson = new Gson();
             HashMap<String, HashMap<String, HashMap<String, HashMap<String, PulsarManagerTopicStats>>>> brokerStatsTopicEntity = gson.fromJson(result,
-                new TypeToken<HashMap<String, HashMap<String, HashMap<String, HashMap<String, PulsarManagerTopicStats>>>>>() {
-                }.getType());
+                    new TypeToken<HashMap<String, HashMap<String, HashMap<String, HashMap<String, PulsarManagerTopicStats>>>>>() {
+                    }.getType());
             brokerStatsTopicEntity.forEach((namespace, namespaceStats) -> {
                 namespaceStats.forEach((bundle, bundleStats) -> {
                     bundleStats.forEach((persistent, persistentStats) -> {
@@ -206,9 +222,9 @@ public class BrokerStatsServiceImpl implements BrokerStatsService {
                                     subscriptionStatsEntity.setMsgThroughputOut(Double.parseDouble(df.format(subscriptionStats.getMsgThroughputOut())));
                                     subscriptionStatsEntity.setMsgRateRedeliver(Double.parseDouble(df.format(subscriptionStats.getMsgRateRedeliver())));
                                     subscriptionStatsEntity.setNumberOfEntriesSinceFirstNotAckedMessage(
-                                        subscriptionStats.getNumberOfEntriesSinceFirstNotAckedMessage());
+                                            subscriptionStats.getNumberOfEntriesSinceFirstNotAckedMessage());
                                     subscriptionStatsEntity.setTotalNonContiguousDeletedMessagesRange(
-                                        subscriptionStats.getTotalNonContiguousDeletedMessagesRange());
+                                            subscriptionStats.getTotalNonContiguousDeletedMessagesRange());
                                     subscriptionStatsEntity.setMsgBacklog(subscriptionStats.getMsgBacklog());
                                     subscriptionStatsEntity.setSubscriptionType(String.valueOf(subscriptionStats.getType()));
                                     subscriptionStatsEntity.setMsgRateExpired(Double.parseDouble(df.format(subscriptionStats.getMsgRateExpired())));

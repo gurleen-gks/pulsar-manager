@@ -33,7 +33,7 @@ LABEL org.label-schema.build-date=$BUILD_DATE \
 
 RUN apt-get update
 
-RUN apt-get install --yes nginx supervisor postgresql \
+RUN apt-get install --yes nginx supervisor postgresql curl procps vim\
   && rm  -rf /tmp/* \
   && rm -rf /var/lib/apt/lists/*
 
@@ -64,6 +64,14 @@ COPY docker/startup.sh /pulsar-manager/
 COPY docker/init_db.sql /pulsar-manager/
 
 COPY docker/entrypoint.sh /pulsar-manager/
+
+COPY docker/broker-cert.pem /pulsar-manager/
+
+COPY docker/broker-key.pem /pulsar-manager/
+
+COPY docker/ca-cert.pem /pulsar-manager/
+
+COPY docker/manager.pkcs12 /pulsar-manager/
 
 COPY front-end/dist /usr/share/nginx/html/
 

@@ -13,6 +13,7 @@
  */
 package org.apache.pulsar.manager.zuul;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -24,12 +25,16 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
+import javax.net.ssl.*;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.security.*;
+import java.security.cert.CertificateException;
 
 @Configuration
+@Slf4j
 public class HttpsClientConfiguration {
 
     @Value("${tls.enabled}")
@@ -37,6 +42,9 @@ public class HttpsClientConfiguration {
 
     @Value("${tls.keystore}")
     private String tlsKeystore;
+
+    @Value("${tls.truststore:/pulsar-manager/yahoo_certificate_bundle.jks}")
+    private String tlsTruststore;
 
     @Value("${tls.keystore.password}")
     private String tlsKeystorePassword;
@@ -46,13 +54,23 @@ public class HttpsClientConfiguration {
 
     @Bean
     public CloseableHttpClient httpClient() throws Exception {
+        log.info("tls enabled {}, keystore {}, keystore password: {}, tlsHostnameVerifier: {}", tlsEnabled, tlsKeystore, tlsKeystorePassword, tlsHostnameVerifier);
         if (tlsEnabled) {
-            Resource resource = new FileSystemResource(tlsKeystore);
-            File trustStoreFile = resource.getFile();
-            SSLContext sslcontext = SSLContexts.custom()
-                    .loadTrustMaterial(trustStoreFile, tlsKeystorePassword.toCharArray(),
-                            new TrustSelfSignedStrategy())
-                    .build();
+//            Resource resource = new FileSystemResource(tlsKeystore);
+//            File keyStoreFile = resource.getFile();
+//            Resource resourceT = new FileSystemResource(tlsTruststore);
+//            File trustStoreFile = resourceT.getFile();
+            KeyManagerFactory keyManagerFactory = buildKeyManagerFactory();
+
+            TrustManagerFactory trustManagerFactory = buildTrustManagerFactory();
+
+            SSLContext sslcontext = buildSslContext(keyManagerFactory, trustManagerFactory);
+//            SSLContext sslcontext = SSLContexts.custom()
+//                    .loadTrustMaterial(trustStoreFile, null,
+//                            new TrustSelfSignedStrategy())
+//                    .loadKeyMaterial(keyStoreFile, tlsKeystorePassword.toCharArray(), tlsKeystorePassword.toCharArray())
+//                    .build();
+
             HostnameVerifier hostnameVerifier = (s, sslSession) -> {
                 // Custom logic to verify host name, tlsHostnameVerifier is false for test
                 if (!tlsHostnameVerifier) {
@@ -72,5 +90,63 @@ public class HttpsClientConfiguration {
                     .build();
         }
         return HttpClients.custom().build();
+    }
+
+    private KeyManagerFactory buildKeyManagerFactory() throws UnrecoverableKeyException,
+            NoSuchAlgorithmException,
+            KeyStoreException,
+            IOException,
+            CertificateException {
+        String storeType = "pkcs12";
+        KeyStore keyStore = KeyStore.getInstance(storeType);
+
+        char[] storePass = tlsKeystorePassword.toCharArray();
+        try (InputStream fis = new FileInputStream(tlsKeystore)) {
+            keyStore.load(fis, storePass);
+        }
+
+        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(
+                KeyManagerFactory.getDefaultAlgorithm()
+        );
+
+        char[] keyPass = tlsKeystorePassword.toCharArray();
+        keyManagerFactory.init(keyStore, keyPass);
+
+        return keyManagerFactory;
+    }
+
+    private TrustManagerFactory buildTrustManagerFactory() throws KeyStoreException,
+            IOException,
+            NoSuchAlgorithmException,
+            CertificateException {
+        String storeType = "jks";
+        KeyStore trustStore = KeyStore.getInstance(storeType);
+
+        try (InputStream fis = new FileInputStream(tlsTruststore)) {
+            trustStore.load(fis, null);
+        }
+
+        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(
+                TrustManagerFactory.getDefaultAlgorithm()
+        );
+
+        trustManagerFactory.init(trustStore);
+
+        return trustManagerFactory;
+    }
+
+    static SSLContext buildSslContext(
+            KeyManagerFactory keyManagerFactory,
+            TrustManagerFactory trustManagerFactory) throws KeyManagementException,
+            NoSuchAlgorithmException {
+        SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
+
+        sslContext.init(
+                keyManagerFactory.getKeyManagers(),
+                trustManagerFactory.getTrustManagers(),
+                null
+        );
+
+        return sslContext;
     }
 }

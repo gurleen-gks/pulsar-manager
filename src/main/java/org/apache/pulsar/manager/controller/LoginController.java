@@ -78,6 +78,7 @@ public class LoginController {
     @RequestMapping(value = "/login", method =  RequestMethod.POST)
     public ResponseEntity<Map<String, Object>> login(
             @RequestBody Map<String, String> body) {
+        log.info("****Handling login with data {}******", body);
         String userAccount = body.get("username");
         String userPassword = body.get("password");
         Map<String, Object> result = Maps.newHashMap();
