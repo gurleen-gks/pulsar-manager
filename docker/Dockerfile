@@ -33,7 +33,7 @@ LABEL org.label-schema.build-date=$BUILD_DATE \
 
 RUN apt-get update
 
-RUN apt-get install --yes nginx supervisor postgresql curl procps vim\
+RUN apt-get install --yes nginx supervisor postgresql curl procps vim \
   && rm  -rf /tmp/* \
   && rm -rf /var/lib/apt/lists/*
 
@@ -47,13 +47,11 @@ RUN tar -xf pulsar-manager.tar
 
 RUN rm -r pulsar-manager.tar
 
-COPY docker/supervisord.conf /etc/
+### install yahoo-cert bundle
 
-COPY docker/supervisord-token.conf /etc/
+COPY --from=docker.ouroath.com:4443/paranoids/ca-cert-bundle:20210802-201449  /opt/yahoo/share/ssl/certs/yahoo_certificate_bundle.jks /opt/yahoo/share/ssl/certs/yahoo_certificate_bundle.jks
 
-COPY docker/supervisord-private-key.conf /etc/
-
-COPY docker/supervisord-secret-key.conf /etc/
+RUN chmod 644 /opt/yahoo/share/ssl/certs/yahoo_certificate_bundle.jks
 
 COPY docker/supervisord-configuration-file.conf /etc/
 
@@ -64,14 +62,6 @@ COPY docker/startup.sh /pulsar-manager/
 COPY docker/init_db.sql /pulsar-manager/
 
 COPY docker/entrypoint.sh /pulsar-manager/
-
-COPY docker/broker-cert.pem /pulsar-manager/
-
-COPY docker/broker-key.pem /pulsar-manager/
-
-COPY docker/ca-cert.pem /pulsar-manager/
-
-COPY docker/manager.pkcs12 /pulsar-manager/
 
 COPY front-end/dist /usr/share/nginx/html/
 

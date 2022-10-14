@@ -13,6 +13,7 @@
  */
 package org.apache.pulsar.manager.zuul;
 
+import com.oath.auth.KeyRefresher;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
@@ -40,31 +41,34 @@ public class HttpsClientConfiguration {
     @Value("${tls.enabled}")
     private boolean tlsEnabled;
 
-    @Value("${tls.keystore}")
-    private String tlsKeystore;
+    @Value("${tls.certpath}")
+    private String tlsCertpath;
 
-    @Value("${tls.truststore:/pulsar-manager/yahoo_certificate_bundle.jks}")
+    @Value("${tls.keypath}")
+    private String tlsKeypath;
+
+    @Value("${tls.truststore}")
     private String tlsTruststore;
 
-    @Value("${tls.keystore.password}")
-    private String tlsKeystorePassword;
+    @Value("${tls.truststore.password}")
+    private String tlsTruststorePassword;
 
     @Value("${tls.hostname.verifier}")
     private boolean tlsHostnameVerifier;
 
     @Bean
     public CloseableHttpClient httpClient() throws Exception {
-        log.info("tls enabled {}, keystore {}, keystore password: {}, tlsHostnameVerifier: {}", tlsEnabled, tlsKeystore, tlsKeystorePassword, tlsHostnameVerifier);
+        log.info("tls enabled {}, keystore {}, keystore password: {}, tlsHostnameVerifier: {}, cert: {}, key: {}", tlsEnabled, tlsTruststore, tlsTruststorePassword, tlsHostnameVerifier, tlsCertpath, tlsKeypath);
         if (tlsEnabled) {
 //            Resource resource = new FileSystemResource(tlsKeystore);
 //            File keyStoreFile = resource.getFile();
 //            Resource resourceT = new FileSystemResource(tlsTruststore);
 //            File trustStoreFile = resourceT.getFile();
-            KeyManagerFactory keyManagerFactory = buildKeyManagerFactory();
+            //KeyManagerFactory keyManagerFactory = buildKeyManagerFactory();
 
-            TrustManagerFactory trustManagerFactory = buildTrustManagerFactory();
+            //TrustManagerFactory trustManagerFactory = buildTrustManagerFactory();
 
-            SSLContext sslcontext = buildSslContext(keyManagerFactory, trustManagerFactory);
+            SSLContext sslcontext = createAthenzSSLContext(tlsCertpath, tlsKeypath, tlsTruststore, tlsTruststorePassword);
 //            SSLContext sslcontext = SSLContexts.custom()
 //                    .loadTrustMaterial(trustStoreFile, null,
 //                            new TrustSelfSignedStrategy())
@@ -92,61 +96,69 @@ public class HttpsClientConfiguration {
         return HttpClients.custom().build();
     }
 
-    private KeyManagerFactory buildKeyManagerFactory() throws UnrecoverableKeyException,
-            NoSuchAlgorithmException,
-            KeyStoreException,
-            IOException,
-            CertificateException {
-        String storeType = "pkcs12";
-        KeyStore keyStore = KeyStore.getInstance(storeType);
+//    private KeyManagerFactory buildKeyManagerFactory() throws UnrecoverableKeyException,
+//            NoSuchAlgorithmException,
+//            KeyStoreException,
+//            IOException,
+//            CertificateException {
+//        String storeType = "pkcs12";
+//        KeyStore keyStore = KeyStore.getInstance(storeType);
+//
+//        char[] storePass = tlsKeystorePassword.toCharArray();
+//        try (InputStream fis = new FileInputStream(tlsKeystore)) {
+//            keyStore.load(fis, storePass);
+//        }
+//
+//        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(
+//                KeyManagerFactory.getDefaultAlgorithm()
+//        );
+//
+//        char[] keyPass = tlsKeystorePassword.toCharArray();
+//        keyManagerFactory.init(keyStore, keyPass);
+//
+//        return keyManagerFactory;
+//    }
+//
+//    private TrustManagerFactory buildTrustManagerFactory() throws KeyStoreException,
+//            IOException,
+//            NoSuchAlgorithmException,
+//            CertificateException {
+//        String storeType = "jks";
+//        KeyStore trustStore = KeyStore.getInstance(storeType);
+//
+//        try (InputStream fis = new FileInputStream(tlsTruststore)) {
+//            trustStore.load(fis, null);
+//        }
+//
+//        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(
+//                TrustManagerFactory.getDefaultAlgorithm()
+//        );
+//
+//        trustManagerFactory.init(trustStore);
+//
+//        return trustManagerFactory;
+//    }
+//
+//    static SSLContext buildSslContext(
+//            KeyManagerFactory keyManagerFactory,
+//            TrustManagerFactory trustManagerFactory) throws KeyManagementException,
+//            NoSuchAlgorithmException {
+//        SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
+//
+//        sslContext.init(
+//                keyManagerFactory.getKeyManagers(),
+//                trustManagerFactory.getTrustManagers(),
+//                null
+//        );
+//
+//        return sslContext;
+//    }
 
-        char[] storePass = tlsKeystorePassword.toCharArray();
-        try (InputStream fis = new FileInputStream(tlsKeystore)) {
-            keyStore.load(fis, storePass);
-        }
-
-        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(
-                KeyManagerFactory.getDefaultAlgorithm()
-        );
-
-        char[] keyPass = tlsKeystorePassword.toCharArray();
-        keyManagerFactory.init(keyStore, keyPass);
-
-        return keyManagerFactory;
-    }
-
-    private TrustManagerFactory buildTrustManagerFactory() throws KeyStoreException,
-            IOException,
-            NoSuchAlgorithmException,
-            CertificateException {
-        String storeType = "jks";
-        KeyStore trustStore = KeyStore.getInstance(storeType);
-
-        try (InputStream fis = new FileInputStream(tlsTruststore)) {
-            trustStore.load(fis, null);
-        }
-
-        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(
-                TrustManagerFactory.getDefaultAlgorithm()
-        );
-
-        trustManagerFactory.init(trustStore);
-
-        return trustManagerFactory;
-    }
-
-    static SSLContext buildSslContext(
-            KeyManagerFactory keyManagerFactory,
-            TrustManagerFactory trustManagerFactory) throws KeyManagementException,
-            NoSuchAlgorithmException {
-        SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
-
-        sslContext.init(
-                keyManagerFactory.getKeyManagers(),
-                trustManagerFactory.getTrustManagers(),
-                null
-        );
-
-        return sslContext;
-    }
-}
+    public static SSLContext createAthenzSSLContext(String certPath, String certKeyPath, String trustStorePath, String trustStorePassword) throws Exception {
+        log.info("Create SSLContext from Athenz 509x certs...");
+        KeyRefresher keyRefresher = com.oath.auth.Utils.generateKeyRefresher(trustStorePath, trustStorePassword,
+                certPath, certKeyPath);
+        keyRefresher.startup();
+        return com.oath.auth.Utils.buildSSLContext(keyRefresher.getKeyManagerProxy(),
+                keyRefresher.getTrustManagerProxy());
+    }}
