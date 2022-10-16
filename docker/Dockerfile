@@ -33,7 +33,7 @@ LABEL org.label-schema.build-date=$BUILD_DATE \
 
 RUN apt-get update
 
-RUN apt-get install --yes nginx supervisor postgresql curl procps vim \
+RUN apt-get install --yes nginx supervisor postgresql curl procps vim dnsutils iputils-ping\
   && rm  -rf /tmp/* \
   && rm -rf /var/lib/apt/lists/*
 
