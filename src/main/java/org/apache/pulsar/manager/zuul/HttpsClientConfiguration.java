@@ -60,21 +60,7 @@ public class HttpsClientConfiguration {
     public CloseableHttpClient httpClient() throws Exception {
         log.info("tls enabled {}, keystore {}, keystore password: {}, tlsHostnameVerifier: {}, cert: {}, key: {}", tlsEnabled, tlsTruststore, tlsTruststorePassword, tlsHostnameVerifier, tlsCertpath, tlsKeypath);
         if (tlsEnabled) {
-//            Resource resource = new FileSystemResource(tlsKeystore);
-//            File keyStoreFile = resource.getFile();
-//            Resource resourceT = new FileSystemResource(tlsTruststore);
-//            File trustStoreFile = resourceT.getFile();
-            //KeyManagerFactory keyManagerFactory = buildKeyManagerFactory();
-
-            //TrustManagerFactory trustManagerFactory = buildTrustManagerFactory();
-
             SSLContext sslcontext = createAthenzSSLContext(tlsCertpath, tlsKeypath, tlsTruststore, tlsTruststorePassword);
-//            SSLContext sslcontext = SSLContexts.custom()
-//                    .loadTrustMaterial(trustStoreFile, null,
-//                            new TrustSelfSignedStrategy())
-//                    .loadKeyMaterial(keyStoreFile, tlsKeystorePassword.toCharArray(), tlsKeystorePassword.toCharArray())
-//                    .build();
-
             HostnameVerifier hostnameVerifier = (s, sslSession) -> {
                 // Custom logic to verify host name, tlsHostnameVerifier is false for test
                 if (!tlsHostnameVerifier) {
@@ -95,64 +81,6 @@ public class HttpsClientConfiguration {
         }
         return HttpClients.custom().build();
     }
-
-//    private KeyManagerFactory buildKeyManagerFactory() throws UnrecoverableKeyException,
-//            NoSuchAlgorithmException,
-//            KeyStoreException,
-//            IOException,
-//            CertificateException {
-//        String storeType = "pkcs12";
-//        KeyStore keyStore = KeyStore.getInstance(storeType);
-//
-//        char[] storePass = tlsKeystorePassword.toCharArray();
-//        try (InputStream fis = new FileInputStream(tlsKeystore)) {
-//            keyStore.load(fis, storePass);
-//        }
-//
-//        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(
-//                KeyManagerFactory.getDefaultAlgorithm()
-//        );
-//
-//        char[] keyPass = tlsKeystorePassword.toCharArray();
-//        keyManagerFactory.init(keyStore, keyPass);
-//
-//        return keyManagerFactory;
-//    }
-//
-//    private TrustManagerFactory buildTrustManagerFactory() throws KeyStoreException,
-//            IOException,
-//            NoSuchAlgorithmException,
-//            CertificateException {
-//        String storeType = "jks";
-//        KeyStore trustStore = KeyStore.getInstance(storeType);
-//
-//        try (InputStream fis = new FileInputStream(tlsTruststore)) {
-//            trustStore.load(fis, null);
-//        }
-//
-//        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(
-//                TrustManagerFactory.getDefaultAlgorithm()
-//        );
-//
-//        trustManagerFactory.init(trustStore);
-//
-//        return trustManagerFactory;
-//    }
-//
-//    static SSLContext buildSslContext(
-//            KeyManagerFactory keyManagerFactory,
-//            TrustManagerFactory trustManagerFactory) throws KeyManagementException,
-//            NoSuchAlgorithmException {
-//        SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
-//
-//        sslContext.init(
-//                keyManagerFactory.getKeyManagers(),
-//                trustManagerFactory.getTrustManagers(),
-//                null
-//        );
-//
-//        return sslContext;
-//    }
 
     public static SSLContext createAthenzSSLContext(String certPath, String certKeyPath, String trustStorePath, String trustStorePassword) throws Exception {
         log.info("Create SSLContext from Athenz 509x certs...");

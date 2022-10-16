@@ -49,9 +49,7 @@ RUN rm -r pulsar-manager.tar
 
 ### install yahoo-cert bundle
 
-COPY --from=docker.ouroath.com:4443/paranoids/ca-cert-bundle:20210802-201449  /opt/yahoo/share/ssl/certs/yahoo_certificate_bundle.jks /opt/yahoo/share/ssl/certs/yahoo_certificate_bundle.jks
-
-RUN chmod 644 /opt/yahoo/share/ssl/certs/yahoo_certificate_bundle.jks
+COPY --from=docker.ouroath.com:4443/paranoids/ca-cert-bundle:20210802-201449  /opt/yahoo/share/ssl/certs/yahoo_certificate_bundle.pem /opt/yahoo/share/ssl/certs/yahoo_certificate_bundle.pem
 
 COPY docker/supervisord-configuration-file.conf /etc/
 

@@ -41,6 +41,9 @@ nginx
 echo 'Creating keystore'
 openssl pkcs12 -export -inkey /var/lib/sia/keys/cms.aws.nonprod.cmsawsstg-pulsar-manager-acct.key.pem -in /var/lib/sia/certs/cms.aws.nonprod.cmsawsstg-pulsar-manager-acct.cert.pem -out /pulsar-manager/manager.pkcs12 -password pass:changeit
 
+echo 'changing permissions'
+chmod 644 /opt/yahoo/share/ssl/certs/yahoo_certificate_bundle.jks
+
 
 echo 'Starting Pulsar Manager Back end'
 
